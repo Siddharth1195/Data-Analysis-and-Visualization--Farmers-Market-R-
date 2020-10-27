@@ -1,0 +1,623 @@
+#read dataset
+farmer<-read.csv("farmers_market_info.csv", sep=",", header = TRUE, stringsAsFactors = FALSE)
+
+#activate libraries
+library(stringr)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(lubridate)
+
+```{r}
+#PROBLEM-1: For this problem you need not depend on map based visualizations. You can come up with innovative visualization techniques (city or county or state based) that gives geography based insights about the farmers market.
+
+#adding regions cloumn to dataset
+Northeast_region<-c("Connecticut", "Maine", "Massachusetts", "New Hampshire", "Rhode Island", "Vermont", "New Jersey", "New York", "Pennsylvania")
+Midwest_region<-c("Illinois", "Indiana", "Michigan", "Ohio", "Wisconsin", "Iowa", "Kansas", "Minnesota", "Missouri", "Nebraska", "North Dakota", "South Dakota")
+South_region<-c("Delaware", "Florida", "Georgia", "Maryland", "North Carolina", "South Carolina", "Virginia", "District of Columbia", "West Virginia", "Arkansas", "Louisiana", "Oklahoma", "Texas", "Alabama", "Kentucky", "Mississippi", "Puerto Rico", "Virgin Islands", "Tennessee")
+West_region<-c("Arizona", "Colorado", "Idaho","Montana", "Nevada","New Mexico","Utah","Wyoming", "Alaska","California","Hawaii","Oregon","Washington")
+Regions<-c(Northeast_region, Midwest_region, South_region, West_region)
+farmer<-mutate(farmer, Region = ifelse(State %in% Northeast_region, 'Northeast Region', 
+                                ifelse(State %in% Midwest_region, 'Midwest Region', 
+                                ifelse(State %in% South_region, 'South Region', 'West Region'))))
+
+
+#Plot1a: Pie chart - Region wise distribution in percent
+
+Region_count<-plyr::count(farmer$Region)
+Region_count$percent<-round((Region_count$freq*100/8788),2)
+
+ggplot(Region_count, aes(x="", y=percent, fill=x)) + 
+geom_bar(stat="identity", width=1) +
+coord_polar("y", start=0) + 
+geom_text(aes(label = paste0(round(percent), "%")), position = position_stack(vjust = 0.5), size = 5, color="black") +
+scale_fill_manual(values=c("#79b2ce","#ff6f69","#ffcc5c","#88d8b0"))+
+labs(x = NULL, y = NULL, fill = "Region", title = "Distribution of markets geographically")+
+theme_classic() + 
+theme(axis.text = element_blank(), axis.ticks = element_blank(), axis.line = element_blank(),
+      plot.title = element_text(family="Arial", face="bold",color="black",size=22, hjust=0.5),
+      legend.title = element_text(family="Arial",color="black", size=19),
+      legend.text= element_text(family="Arial", color="black", size=17),
+      legend.background = element_rect(size=0.5, linetype="solid", 
+                                       colour ="black"))
+rm(Region_count)
+```
+
+
+```{r}
+#Plot1b: bar plot - State wise count in numbers
+
+state_count<-farmer%>%
+              group_by(State)
+state_count<-plyr::count(state_count$State)
+state_count<-mutate(state_count, Region = ifelse(x %in% Northeast_region, 'Northeast Region', ifelse(x %in% Midwest_region, 'Midwest Region', ifelse(x %in% South_region, 'South Region', 'West Region'))))
+ggplot(state_count, aes(x=factor(reorder(x, freq)), y=freq, fill=Region, label=freq)) +
+  geom_histogram(stat="identity")+
+  coord_flip() +
+  xlab("State") +
+  ylab("Number of markets") +
+  ggtitle("Distribution of markets geographically") +
+  geom_text(size = 4, hjust=1, color="black")+
+  scale_fill_manual(values=c("#79b2ce","#ff6f69","#ffcc5c","#88d8b0")) +
+  theme_classic()+
+  theme(plot.title = element_text(family="Arial", face="bold", color="black",size=22, hjust=0.5), 
+        axis.title.x = element_text(family="Arial",color="black", size=17, hjust=0.5), 
+        axis.title.y = element_text(family="Arial",color="black", size=17, hjust=0.5), 
+        axis.text.x = element_text(family="Arial",color="black", size=11),
+        axis.text.y = element_text(family="Arial",color="black", size=11),
+        legend.title = element_text(family="Arial",color="black", size=17),
+        legend.text= element_text(family="Arial", color="black", size=12),
+        legend.position = c(0.8, 0.2),
+        legend.background = element_rect(size=0.5, linetype="solid", 
+                                         colour ="black"))
+
+rm(state_count, Northeast_region, Midwest_region, South_region, West_region, Regions)
+```
+
+
+```{r}
+#PROBLEM-2: Give time based insights (trends) that show the evolution of farmers market.
+
+#Plot2a: time series - number of markets year wise
+
+Season1<-farmer%>%
+           select(State, Region, Season1Date)
+Season2<-farmer%>%
+         select(State, Region, Season2Date)
+Season3<-farmer%>%
+        select(State, Region, Season3Date)
+Season4<-farmer%>%
+         select(State, Region, Season4Date)
+       
+
+colnames(Season1)<-c("State", "Region", "Date")
+colnames(Season2)<-c("State", "Region", "Date")
+colnames(Season3)<-c("State", "Region", "Date")
+colnames(Season4)<-c("State", "Region", "Date")
+
+Date<-rbind(Season1, Season2)
+Date<-rbind(Date,Season3)
+Date<-rbind(Date, Season4)
+       
+Date<-Date%>%
+      filter(Date!= "" & nchar(Date)==24)
+Date$Start_date<-str_sub(Date$Date, start=1L, end=10L)
+Date$End_date<-str_sub(Date$Date, start=15L, end=24L)
+Date<-Date%>%
+  filter(!is.na(Start_date)&!is.na(End_date))
+Date$Start_date<-as.Date(Date$Start_date, format="%m/%d/%Y",)
+Date$End_date<-as.Date(Date$End_date, format="%m/%d/%Y")
+
+Start_date<-Date%>%
+            select(State, Region, Start_date)%>%
+           filter(!is.na(ymd(Start_date))&!is.na(Start_date))
+Start_date$Start_or_End<-"s"
+colnames(Start_date)<-c("State", "Region", "Date", "Start/End")
+End_date<-Date%>%
+           select(State, Region, End_date)%>%
+          filter(!is.na(ymd(End_date))&!is.na(End_date))
+End_date$Start_or_End<-"e"
+colnames(End_date)<-c("State", "Region", "Date", "Start/End")
+Market_duration<-rbind(Start_date, End_date)
+Date<-Date%>%
+      filter(!is.na(Start_date)&!is.na(End_date))
+Date$Start_date<-as.Date(Date$Start_date, format="%m/%d/%Y",)
+Date$End_date<-as.Date(Date$End_date, format="%m/%d/%Y")
+
+Start_date<-Date%>%
+  select(State, Region, Start_date)%>%
+  filter(!is.na(ymd(Start_date))&!is.na(Start_date))
+Start_date$Start_or_End<-"s"
+colnames(Start_date)<-c("State", "Region", "Date", "Start/End")
+End_date<-Date%>%
+  select(State, Region, End_date)%>%
+  filter(!is.na(ymd(End_date))&!is.na(End_date))
+End_date$Start_or_End<-"e"
+colnames(End_date)<-c("State", "Region", "Date", "Start/End")
+Market_duration<-rbind(Start_date, End_date)
+
+Market_duration<-Market_duration[order(Market_duration$Date),]
+sum=0
+Market_duration<-mutate(Market_duration, Count=ifelse(Market_duration$`Start/End`=="s", sum+1, sum-1))
+Market_duration<-mutate(Market_duration, Count= cumsum(Market_duration$Count))
+
+ggplot(Market_duration, aes(x=Date, y=Count))+
+geom_line(color="#79b2ce")+
+xlab("")+
+ylab("Number of markets")+
+ggtitle("Evolution of markets") +
+theme_gray()+
+theme(plot.title = element_text(family="Arial", face="bold", color="black",size=22, hjust=0.5), 
+      axis.title.x = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.title.y = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.text.x = element_text(family="Arial",color="black", size=16),
+      axis.text.y = element_text(family="Arial",color="black", size=16),
+      legend.title = element_text(family="Arial",color="black", size=19),
+      legend.text= element_text(family="Arial", color="black", size=16))
+
+```
+
+
+
+```{r}
+#Plot2b: time series - month wise pattern
+
+monthly_market<-data.frame(State=Start_date$State, Region=Start_date$Region, Start_date=as.Date(Start_date$Date), End_date=as.Date(End_date$Date))
+monthly_market<-monthly_market%>%
+               filter(!is.na(Start_date)&!is.na(End_date))
+monthly_market<-monthly_market%>%
+                mutate(Start_date=month(ymd(Start_date)))%>%
+                mutate(End_date=month(ymd(End_date)))
+months<-c(1,2,3,4,5,6,7,8,9,10,11,12)
+monthly_market<-monthly_market%>%
+                group_by(Start_date, End_date)%>%
+                 mutate(Months=ifelse(Start_date<End_date, 
+                                      paste(months[Start_date:End_date], collapse=","),
+                                      paste(months[-((Start_date-1):(End_date+1))], collapse=",")))
+monthly_market<-separate_rows(monthly_market, Months, sep=",", convert=TRUE)
+Month_names<-c("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+monthly_market$Months<-factor(monthly_market$Months, levels=months, labels=Month_names)
+
+ggplot()+
+geom_line(monthly_market[monthly_market$Region=="Northeast Region",], mapping=aes(x=factor(Months), color=Region), group="1", stat="count", size=1.5) +
+geom_line(monthly_market[monthly_market$Region=="West Region",], mapping=aes(x=factor(Months), color=Region), group="1", stat="count", size=1.5) +
+geom_line(monthly_market[monthly_market$Region=="Midwest Region",], mapping=aes(x=factor(Months), color=Region), group="1", stat="count", size=1.5) +
+geom_line(monthly_market[monthly_market$Region=="South Region",], mapping=aes(x=factor(Months), color=Region), group="1", stat="count", size=1.5) +
+xlab("Month")+
+ylab("Number of markets")+
+ggtitle("Duration of markets")+
+scale_color_manual(values=c("#79b2ce","#ff6f69","#ffcc5c","#88d8b0"))+
+theme_gray()+
+theme(plot.title = element_text(family="Arial", face="bold", color="black",size=22, hjust=0.5), 
+      axis.title.x = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.title.y = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.text.x = element_text(family="Arial",color="black", size=15),
+      axis.text.y = element_text(family="Arial",color="black", size=15),
+      legend.title = element_text(family="Arial",color="black", size=19),
+      legend.text= element_text(family="Arial", color="black", size=15),
+      legend.position = c(0.15, 0.8),
+      legend.background = element_rect(size=0.5, linetype="solid", 
+                                       colour ="black"))
+
+rm(Season1, Season2, Season3, Season4, Date, Start_date, End_date, sum, Market_duration, monthly_market, Month_names, months)
+
+```
+
+
+```{r}
+#PROBLEM-3: Give product based insights that helps the client to understand the type of products or product mix in farmers market across the country
+
+#Plot3a: grouped bar plot - product category wise count
+
+
+Dairy_products<-c("Bakedgoods", "Cheese")
+Meat_products<-c("Eggs", "Seafood", "Meat", "Poultry")
+Plant_products<-c("Herbs", "Vegetables", "Honey", "Jams", "Maple", "Nuts", "Beans", "Fruits", "Grains", "Mushrooms", "Coffee")
+Organic<- c("Organic", "WildHarvested", "Trees", "Plants", "Flowers", "Nursery", "Tofu")
+Others<-c("Prepared", "Soap", "PetFood", "Wine", "Juices", "Crafts")
+All_items<-c(Dairy_products, Meat_products, Plant_products, Organic, Others)
+
+item_category<-farmer%>%
+                select(Organic:WildHarvested)
+item_category[] <- lapply(item_category, function(x) as.numeric(gsub("[Y,]", "1", x)))
+item_category$Region <- farmer$Region
+
+item_dairy<-item_category%>%
+              group_by(Region)%>%
+               summarise(Count=sum(Bakedgoods, Cheese, na.rm=TRUE), Item="Dairy and bakery products")
+              
+item_meat<-item_category%>%
+           group_by(Region)%>%
+           summarise(Count=sum(Eggs, Seafood, Meat, Poultry, na.rm=TRUE), Item="Meat products")
+           
+item_plant<-item_category%>%
+            group_by(Region)%>%
+            summarise(Count=sum(Herbs, Vegetables, Honey, Jams, Maple, Nuts, Beans, Fruits, Grains, Mushrooms, Coffee, na.rm=TRUE), Item="Plant products")
+
+item_organic<-item_category%>%
+           group_by(Region)%>%
+           summarise(Count=sum(Organic, WildHarvested, Trees, Plants, Flowers, Nursery, Tofu, na.rm=TRUE), Item="Organic products")
+
+item_other<-item_category%>%
+            group_by(Region)%>%
+            summarise(Count=sum(Prepared, Soap, PetFood, Wine, Juices, Crafts, na.rm=TRUE), Item="Beverage and other products")
+
+item_category<-rbind(item_dairy, item_meat)
+item_category<-rbind(item_category, item_plant)
+item_category<-rbind(item_category, item_organic)
+item_category<-rbind(item_category, item_other)
+
+ggplot(item_category, aes(x=factor(reorder(Region, -Count)), y=Count, fill=factor(Item), label = Count)) +
+geom_bar(stat="identity", position="Dodge", width=0.8) +
+xlab("Region") +
+ylab("Number of markets") +
+labs(fill="Product category") +
+ggtitle("Products offered in farmers market")+
+geom_text(size=4, color = "black", position = position_dodge(width=0.8), vjust=-0.1)+
+scale_fill_manual(values=c("#7e9ebb", "#eac17f","#d97c7c","#b7ded2", "#4ca299"))+
+theme_gray()+
+theme(plot.title = element_text(family="Arial", face="bold", color="black",size=22, hjust=0.5), 
+      axis.title.x = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.title.y = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.text.x = element_text(family="Arial",color="black", size=16),
+      axis.text.y = element_text(family="Arial",color="black", size=16),
+      legend.title = element_text(family="Arial",color="black", size=19),
+      legend.text= element_text(family="Arial", color="black", size=16),
+      legend.position = c(0.86, 0.86),
+      legend.background = element_rect(size=0.5, linetype="solid", 
+                                       colour ="black"))
+
+rm(Dairy_products, Meat_products, Plant_products, Organic, Others, All_items, item_category, item_dairy, item_meat, item_plant, item_organic, item_other)
+
+```
+
+```{r}
+#Plot3b: bar plot - all items in percent
+
+item_category<-farmer%>%
+  select(Organic:WildHarvested)
+item_category[] <- lapply(item_category, function(x) as.numeric(gsub("[Y,]", "1", x)))
+
+organic_ind<-which(colnames(item_category)=="Organic")
+wildharvested_ind<-which(colnames(item_category)=="WildHarvested")
+count = c()
+for(i in organic_ind:wildharvested_ind){
+  count = c(count, sum(item_category[, i], na.rm = TRUE))
+}
+
+food_sum<-data.frame(colnames(item_category), count)
+food_total=sum(food_sum$count)
+food_sum$percent<-(round((food_sum$count*100/food_total),2))
+
+
+ggplot(food_sum, aes(y=percent, x=reorder(colnames.item_category., percent), label=paste(percent, "%"))) +
+geom_histogram(stat="identity", fill="#79b2ce", alpha=0.5)+
+coord_flip() +
+xlab("Product") +
+ylab("Percent") +
+ggtitle("Product share") +
+geom_text(size = 4, hjust=1, color="black")+
+theme_classic()+
+theme(plot.title = element_text(family="Arial", face="bold", color="black",size=22, hjust=0.5), 
+       axis.title.x = element_text(family="Arial",color="black", size=17, hjust=0.5), 
+       axis.title.y = element_text(family="Arial",color="black", size=17, hjust=0.5), 
+       axis.text.x = element_text(family="Arial",color="black", size=12),
+       axis.text.y = element_text(family="Arial",color="black", size=12),)
+
+rm(item_category, organic_ind, wildharvested_ind, count, food_sum, food_total,i)
+
+```
+
+
+```{r}
+#PROBLEM-4: Give insights on payment modes used by the farmers market
+
+#Plot4a: bin2d - count of payment method region wise
+
+payment_method<-farmer%>%
+               select(Credit:SNAP)
+payment_method[] <- lapply(payment_method, function(x) as.numeric(gsub("[Y,]", "1", x)))
+payment_method$Region <- farmer$Region
+
+payment_credit<-payment_method%>%
+  group_by(Region)%>%
+  summarise(Count=sum(Credit, na.rm=TRUE), Method="Credit")
+
+payment_wic<-payment_method%>%
+  group_by(Region)%>%
+  summarise(Count=sum(WIC, na.rm=TRUE), Method="WIC")
+
+payment_wiccash<-payment_method%>%
+  group_by(Region)%>%
+  summarise(Count=sum(WICcash, na.rm=TRUE), Method="WICcash")
+
+payment_sfmnp<-payment_method%>%
+  group_by(Region)%>%
+  summarise(Count=sum(SFMNP, na.rm=TRUE), Method="SFMNP")
+
+payment_snap<-payment_method%>%
+  group_by(Region)%>%
+  summarise(Count=sum(SNAP, na.rm=TRUE), Method="SNAP")
+
+payment_method<-rbind(payment_credit, payment_wic)
+payment_method<-rbind(payment_method, payment_wiccash)
+payment_method<-rbind(payment_method, payment_sfmnp)
+payment_method<-rbind(payment_method, payment_snap)
+
+
+ggplot(payment_method, aes(x=reorder(Method, Count), y=factor(Region), fill=Count, label=Count)) +
+geom_bin2d(stat="bin2d", na.rm=TRUE) +
+coord_flip() +
+xlab("Payment Method") +
+ylab("Region") +
+ggtitle("Payment methods accepted in markets") +
+geom_text(size = 7, color="#f2f2f2")+
+scale_fill_gradient(low="#b7daf1", high="#173854")+
+theme_classic()+
+theme(plot.title = element_text(family="Arial", face="bold",color="black",size=22, hjust=0.5), 
+      axis.title.x = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.title.y = element_text(family="Arial",color="black", size=19, hjust=0.5),
+      axis.line = element_blank(),
+      axis.text.x = element_text(family="Arial",color="black", size=15),
+       axis.text.y = element_text(family="Arial",color="black", size=15),
+       legend.title = element_text(family="Arial",color="black", size=19),
+       legend.text= element_text(family="Arial", color="black", size=15),
+      legend.background = element_rect(size=0.5, linetype="solid", 
+                                       colour ="black"))
+  
+rm(payment_method, payment_credit, payment_wic, payment_wiccash, payment_sfmnp, payment_snap)
+```
+
+
+
+```{r}
+#Plot4b: line plot - evolution of payment method
+
+Season1<-farmer%>%
+        select(Credit:SNAP, Season1Date)
+Season2<-farmer%>%
+  select(Credit:SNAP, Season2Date)
+Season3<-farmer%>%
+  select(Credit:SNAP, Season3Date)
+Season4<-farmer%>%
+  select(Credit:SNAP, Season4Date)
+
+
+colnames(Season1)<-c("Credit", "WIC",  "WICcash", "SFMNP", "SNAP", "Date")
+colnames(Season2)<-c("Credit", "WIC",  "WICcash", "SFMNP", "SNAP", "Date")
+colnames(Season3)<-c("Credit", "WIC",  "WICcash", "SFMNP", "SNAP", "Date")
+colnames(Season4)<-c("Credit", "WIC",  "WICcash", "SFMNP", "SNAP", "Date")
+
+Date<-rbind(Season1, Season2)
+Date<-rbind(Date,Season3)
+Date<-rbind(Date, Season4)
+
+Date<-Date%>%
+     filter(Date!= "" & nchar(Date)==24)
+Date$Start_date<-str_sub(Date$Date, start=1L, end=10L)
+
+Date$Start_date<-as.Date(Date$Start_date, format="%m/%d/%Y",)
+
+Date<-Date%>%
+      select(Credit, WIC,  WICcash, SFMNP, SNAP, Start_date)%>%
+      filter(!is.na(ymd(Start_date)))
+
+Date$Start_date<-year(ymd(Date$Start_date))
+Start_date<-Date$Start_date
+Date[] <- lapply(Date, function(x) as.numeric(gsub("[Y,]", "1", x)))
+Date$Start_date<-Start_date
+Date<-Date%>%
+      filter(Credit==1|WIC==1|WICcash==1|SFMNP==1|SNAP==1)
+
+Credit<-Date%>%
+  group_by(Start_date)%>%
+  summarise(Count=sum(Credit, na.rm=TRUE), Payment_Method="Credit")
+WIC<-Date%>%
+  group_by(Start_date)%>%
+  summarise(Count=sum(WIC, na.rm=TRUE), Payment_Method="WIC")
+WICcash<-Date%>%
+  group_by(Start_date)%>%
+  summarise(Count=sum(WICcash, na.rm=TRUE), Payment_Method="WICcash")
+SFMNP<-Date%>%
+  group_by(Start_date)%>%
+  summarise(Count=sum(SFMNP, na.rm=TRUE), Payment_Method="SFMNP")
+SNAP<-Date%>%
+  group_by(Start_date)%>%
+  summarise(Count=sum(SNAP, na.rm=TRUE), Payment_Method="SNAP")
+
+payment_year<-rbind(Credit,WIC)
+payment_year<-rbind(payment_year,WICcash)
+payment_year<-rbind(payment_year,SFMNP)
+payment_year<-rbind(payment_year,SNAP)
+
+payment_year<-payment_year %>%
+  group_by(Start_date) %>%
+  mutate(Percentage = round(Count/sum(Count)*100, 2))
+colnames(payment_year)<-c("Year", "Count", "Payment Method", "Percentage")
+
+ggplot() +
+geom_point(payment_year[payment_year$`Payment Method`=="Credit",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=3) +
+geom_line(payment_year[payment_year$`Payment Method`=="Credit",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=2) +
+geom_point(payment_year[payment_year$`Payment Method`=="WIC",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=3) +
+geom_line(payment_year[payment_year$`Payment Method`=="WIC",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=2) +
+geom_point(payment_year[payment_year$`Payment Method`=="WICcash",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=3) +
+geom_line(payment_year[payment_year$`Payment Method`=="WICcash",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=2) +
+geom_point(payment_year[payment_year$`Payment Method`=="SFMNP",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=3) +
+geom_line(payment_year[payment_year$`Payment Method`=="SFMNP",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=2) +
+geom_point(payment_year[payment_year$`Payment Method`=="SNAP",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=3) +
+geom_line(payment_year[payment_year$`Payment Method`=="SNAP",], mapping=aes(x=factor(Year), y=Percentage, color=`Payment Method`), group="1", stat="identity", size=2) +
+xlab("Year") +
+ylab("Markets (in percentage)") +
+ggtitle("Evolution of payment methods in farmers market")+
+scale_color_manual(values=c("#d97c7c", "#eac17f","#b3b272","#7e9ebb", "#f1c0b4"))+
+theme_gray()+
+theme(plot.title = element_text(family="Arial", face="bold",color="black",size=22, hjust=0.5), 
+      axis.title.x = element_text(family="Arial",color="black", size=19, hjust=0.5), 
+      axis.title.y = element_text(family="Arial",color="black", size=19, hjust=0.5),
+      axis.line = element_blank(),axis.text.x = element_text(family="Arial",color="black", size=12),
+      axis.text.y = element_text(family="Arial",color="black", size=17),
+      legend.title = element_text(family="Arial",color="black", size=19),
+      legend.text= element_text(family="Arial", color="black", size=17),
+      legend.background = element_rect(size=0.5, linetype="solid", 
+                                       colour ="black"))
+
+rm(Season1, Season2, Season3, Season4, Date, Credit, payment_year, payment_method, payment_snap, payment_sfmnp, payment_wiccash, payment_wic, payment_credit, SFMNP, SNAP, WIC, WICcash, Start_date)
+
+```
+
+
+
+```{r}
+#Task-5: Give insights that are derived from the combination of above four questions.
+Season1<-farmer%>%
+  select(State, Vegetables, Bakedgoods, Fruits, Season1Date)%>%
+  filter((State=="New York"|State=="California") & (Vegetables == 'Y' | Bakedgoods == 'Y' | Fruits == 'Y'))
+Season2<-farmer%>%
+  select(State, Vegetables, Bakedgoods, Fruits, Season2Date)%>%
+  filter((State=="New York"|State=="California") & (Vegetables == 'Y' | Bakedgoods == 'Y' | Fruits == 'Y'))
+Season3<-farmer%>%
+  select(State, Vegetables, Bakedgoods, Fruits, Season3Date)%>%
+  filter((State=="New York"|State=="California") & (Vegetables == 'Y' | Bakedgoods == 'Y' | Fruits == 'Y'))
+Season4<-farmer%>%
+  select(State, Vegetables, Bakedgoods, Fruits, Season4Date)%>%
+  filter((State=="New York"|State=="California") & (Vegetables == 'Y' | Bakedgoods == 'Y' | Fruits == 'Y'))
+
+
+colnames(Season1)<-c("State", "Vegetables", "Bakedgoods", "Fruits", "Date")
+colnames(Season2)<-c("State", "Vegetables", "Bakedgoods", "Fruits", "Date")
+colnames(Season3)<-c("State", "Vegetables", "Bakedgoods", "Fruits", "Date")
+colnames(Season4)<-c("State", "Vegetables", "Bakedgoods", "Fruits", "Date")
+
+ny_products<-rbind(Season1, Season2)
+ny_products<-rbind(ny_products,Season3)
+ny_products<-rbind(ny_products, Season4)
+ny_states<-ny_products$State
+ny_date<-ny_products$Date
+
+ny_products[] <- lapply(ny_products, function(x) as.numeric(gsub("[Y,]", "1", x)))
+ny_products$State<-ny_states
+ny_products$Date<-ny_date
+
+
+ny_products$Start_date<-str_sub(ny_products$Date, start=1L, end=10L)
+ny_products$End_date<-str_sub(ny_products$Date, start=15L, end=24L)
+ny_products$Start_date<-as.Date(ny_products$Start_date, format="%m/%d/%Y")
+ny_products$End_date<-as.Date(ny_products$End_date, format="%m/%d/%Y")
+ny_products<-ny_products%>%
+             filter(Date!= "" & nchar(Date)==24)%>%
+              filter(!is.na(Start_date)&!is.na(End_date))
+
+months<-c(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
+ny_products<-ny_products%>%
+  filter(!is.na(ymd(Start_date)) & !is.na(ymd(End_date)))
+
+ny_products<-ny_products%>%
+  mutate(Start_month = month(ymd(Start_date))) %>%
+  mutate(End_month = month(ymd(End_date)))
+
+ny_products<-ny_products%>%
+  group_by(Start_month, End_month) %>%
+  mutate(Months = ifelse(Start_month < End_month, 
+                         paste(months[Start_month:End_month], collapse = ','), 
+                         paste(months[-((Start_month-1):(End_month+1))], collapse = ',')))
+
+ny_products<- separate_rows(ny_products, Months, sep = ',', convert = TRUE)
+
+month_names<- c('JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC')
+
+ny_products$Months = factor(ny_products$Months, levels = months, labels = month_names)
+
+ny_products<-ny_products%>%
+             select(State, Vegetables, Bakedgoods, Fruits, Months)
+
+ny_vegetables<-ny_products%>%
+               group_by(State, Months)%>%
+               summarise(Count=sum(Vegetables, na.rm=TRUE), Item="Vegetables")
+
+ny_bakedgoods<-ny_products%>%
+               group_by(State, Months)%>%
+               summarise(Count=sum(Bakedgoods, na.rm=TRUE), Item="Bakedgoods")
+
+ny_fruits<-ny_products%>%
+               group_by(State, Months)%>%
+              summarise(Count=sum(Fruits, na.rm=TRUE), Item="Fruits")
+
+ny_products<-rbind(ny_vegetables, ny_bakedgoods)
+ny_products<-rbind(ny_products, ny_fruits)
+
+
+ny_products<-ny_products%>%
+             group_by(State, Months, Item)
+ny_only<-ny_products%>%
+        filter(State=="New York")
+cali_only<-ny_products%>%
+           filter(State=="California")
+
+ny<-ggplot(ny_products[ny_products$State=="New York",], aes(x=factor(Months), y=Count, fill=Item, label=Count))+
+   geom_histogram(stat = 'identity')+
+   geom_text(size = 4, position = position_stack(vjust = 0.5)) +
+   xlab("Month")+
+    ylab("Number of markets")+
+    ggtitle("Markets in New York")+
+    scale_fill_manual(values=c("#79b2ce","#ff6f69","#88d8b0"))+
+   theme_gray()+
+   theme(plot.title = element_text(family="Arial", face="bold",color="black",size=16), 
+         axis.title.x = element_text(family="Arial",size=14), 
+         axis.title.y = element_text(family="Arial",size=14),
+         legend.position = c(0.1, 0.8),
+         legend.background = element_rect(size=0.5, linetype="solid", 
+                                          colour ="black"))
+cali<-ggplot(ny_products[ny_products$State=="California",], aes(x=factor(Months), y=Count, fill=Item, label=Count))+
+     geom_histogram(stat = 'identity')+
+     geom_text(size = 3, position = position_stack(vjust = 0.5)) +
+     xlab("Month")+
+     ylab("Number of markets")+
+     ggtitle("Markets in California")+
+     scale_fill_manual(values=c("#79b2ce","#ff6f69","#88d8b0"))+
+     theme_gray()+
+     theme(plot.title = element_text(family="Arial", face="bold",color="black",size=16), 
+           axis.title.x = element_text(family="Arial",size=14), 
+           axis.title.y = element_text(family="Arial",size=14),
+           legend.position = c(0.1, 0.8),
+           legend.background = element_rect(size=0.5, linetype="solid", 
+                                            colour ="black"))
+nyline<-ggplot()+
+       geom_line(data=ny_only[ny_only$Item=="Vegetables",], mapping=aes(x=Months, y=Count, color=Item), group="1", stat = 'identity')+
+       geom_line(data=ny_only[ny_only$Item=="Bakedgoods",], mapping=aes(x=Months, y=Count, color=Item), group="1", stat = 'identity')+
+       geom_line(data=ny_only[ny_only$Item=="Fruits",], mapping=aes(x=Months, y=Count, color=Item), group="1", stat = 'identity')+
+       geom_text(size = 3, position = position_stack(vjust = 0.5)) +
+       xlab("Month")+
+       ylab("Number of markets")+
+       ggtitle("Markets in New York")+
+       scale_fill_manual(values=c("#79b2ce","#ff6f69","#88d8b0"))+
+       scale_y_continuous(name="Number of markets", limits=c(50, 400))+
+       theme_gray()+
+       theme(plot.title = element_text(family="Arial", face="bold",color="black",size=16), 
+            axis.title.x = element_text(family="Arial",size=14), 
+            axis.title.y = element_text(family="Arial",size=14),
+            legend.position = c(0.1, 0.8),
+            legend.background = element_rect(size=0.5, linetype="solid", 
+                                             colour ="black"))
+caliline<-ggplot()+
+          geom_line(data=cali_only[ny_only$Item=="Vegetables",], mapping=aes(x=Months, y=Count, color=Item), group="1", stat = 'identity')+
+          geom_line(data=cali_only[ny_only$Item=="Bakedgoods",], mapping=aes(x=Months, y=Count, color=Item), group="1", stat = 'identity')+
+          geom_line(data=cali_only[ny_only$Item=="Fruits",], mapping=aes(x=Months, y=Count, color=Item), group="1", stat = 'identity')+
+          geom_text(size = 3, position = position_stack(vjust = 0.5)) +
+          xlab("Month")+
+          ylab("Number of markets")+
+          ggtitle("Markets in California")+
+          scale_fill_manual(values=c("#79b2ce","#ff6f69","#88d8b0"))+
+          scale_y_continuous(name="Number of markets", limits=c(50, 400))+
+          theme_gray()+
+          theme(plot.title = element_text(family="Arial", face="bold",color="black",size=16), 
+                axis.title.x = element_text(family="Arial",size=14), 
+                axis.title.y = element_text(family="Arial",size=14),
+                legend.position = c(0.1, 0.8),
+                legend.background = element_rect(size=0.5, linetype="solid", 
+                                                 colour ="black"))
+
+grid.arrange(ny, cali, nyline, caliline, ncol=2, nrow=2)
+
+rm(Season1, Season2, Season3, Season4, ny_products, ny_states, ny_date, ny_vegetables, ny_fruits, ny_bakedgoods, months, month_names, ny_only, cali_only, ny, cali, nyline, caliline, farmer)
+```
